@@ -1,0 +1,967 @@
+/* ==========================================================================
+   Kinetic Grade Evaluator — Motion Graphics Pass
+   Rigid 30fps Grid (--f: 33.333ms) & Authorial Three-Curve Engine
+   ========================================================================== */
+
+:root {
+  /* Rule 1: Everything runs on a 30fps grid (1 frame = 33.333ms) */
+  --time-scale: 1;
+  --f: calc(33.333ms * var(--time-scale));
+
+  /* Rule 2: Three easing curves, no others */
+  --snap-in:  cubic-bezier(0.7, 0, 0.84, 0);     /* accelerates away, for exits */
+  --snap-out: cubic-bezier(0.16, 1, 0.3, 1);     /* decelerates in, for entrances */
+  --settle:   cubic-bezier(0.34, 1.28, 0.42, 1); /* slight overshoot, for hero elements */
+
+  /* Neo-Brutalist Colors */
+  --ink: #000000;       /* 3px solid borders, all typography */
+  --canvas: #FFFFFF;    /* Pure hard flat white */
+  --paper: #E8E8E4;     /* Recessed utility tone */
+
+  /* Grade Hues (100% full saturation hex) */
+  --grade-a: #00E19B;   /* Mint-electric */
+  --grade-b: #2BB3FF;   /* Signal cyan */
+  --grade-c: #FFD400;   /* Warning yellow */
+  --grade-d: #FF7A1A;   /* Safety orange */
+  --grade-e: #FF7A1A;   /* Safety orange fallback */
+  --grade-f: #FF2D2D;   /* Alarm red */
+
+  /* Live Accent: reassigned to full saturation hex on evaluate / drag */
+  --grade-color: #FFFFFF;
+
+  /* Typography */
+  --font-anybody: 'Anybody', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border-radius: 0 !important;
+}
+
+html, body {
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-anybody);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body.is-dragging {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Viewport Layout */
+.viewport-wrapper {
+  max-width: 1440px;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(0.5rem, 1.5vh, 1rem) clamp(1rem, 2vw, 1.75rem) clamp(0.35rem, 1vh, 0.75rem) clamp(1rem, 2vw, 1.75rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* Header */
+.app-header {
+  flex-shrink: 0;
+  margin-bottom: 0.5rem;
+}
+
+.page-title {
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-variation-settings: 'wght' 700, 'wdth' 100;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.1;
+  text-transform: none;
+}
+
+/* Main Grid: Asymmetric (~32% Left Rail, Right fills rest) */
+.evaluator-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 32%) 1fr;
+  grid-template-rows: 1fr;
+  gap: 1.25rem;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Containers — Neo-Brutalist 3px solid ink */
+.neo-card {
+  border: 3px solid var(--ink);
+  background-color: var(--canvas);
+  position: relative;
+}
+
+/* Left Rail */
+.left-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Input Card */
+.input-card {
+  padding: 1.25rem 1.35rem;
+  background-color: var(--canvas);
+  flex-shrink: 0;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.85rem;
+  font-variation-settings: 'wght' 600, 'wdth' 85;
+  color: var(--ink);
+  margin-bottom: 0.45rem;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* Score-Reactive Input Field */
+.input-wrapper {
+  position: relative;
+  width: 100%;
+  margin-bottom: 0.45rem;
+}
+
+.score-input {
+  width: 100%;
+  border: 3px solid var(--ink);
+  background-color: var(--canvas);
+  color: var(--ink);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-anybody);
+  font-size: 1.35rem;
+  font-variation-settings: 'wght' 700, 'wdth' 105;
+  outline: none;
+  transition: border-color calc(var(--f) * 3) var(--snap-out);
+}
+
+/* Focus Draw-In Outline (5 frames) */
+.focus-ring {
+  position: absolute;
+  inset: -6px;
+  border: 3px solid var(--ink);
+  pointer-events: none;
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path calc(var(--f) * 5) var(--snap-out), opacity 0ms calc(var(--f) * 5);
+}
+
+.score-input:focus-visible ~ .focus-ring {
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  transition: clip-path calc(var(--f) * 5) var(--snap-out), opacity 0ms;
+}
+
+/* Empty-State Invitation Rule (72 frames = 2.4s) */
+.bottom-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background-color: var(--ink);
+  pointer-events: none;
+  opacity: 1;
+}
+
+.bottom-rule.pulse-invitation {
+  animation: invitePulse calc(var(--f) * 72) var(--snap-out) 2 forwards;
+}
+
+@keyframes invitePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Error Message Plaintext */
+.error-msg {
+  min-height: 1.25rem;
+  font-size: 0.8rem;
+  font-variation-settings: 'wght' 600, 'wdth' 95;
+  color: var(--grade-f);
+  margin-bottom: 0.45rem;
+}
+
+/* Input Shake (10 frames = 333ms) */
+.input-wrapper.shake {
+  animation: fieldShake calc(var(--f) * 10) var(--snap-out);
+}
+
+@keyframes fieldShake {
+  0%, 100% { transform: translateX(0); }
+  16.66%  { transform: translateX(-8px); }
+  33.33%  { transform: translateX(8px); }
+  50%     { transform: translateX(-8px); }
+  66.66%  { transform: translateX(8px); }
+  83.33%  { transform: translateX(-8px); }
+}
+
+/* Evaluate Button (F00: 3 frames snap down, --snap-in) */
+.eval-btn {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  border: 3px solid var(--ink);
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-anybody);
+  font-size: 1.15rem;
+  font-variation-settings: 'wght' 700, 'wdth' 105;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: translate(0, 0);
+  transition: transform calc(var(--f) * 4) var(--snap-out), box-shadow calc(var(--f) * 4) var(--snap-out);
+  outline: none;
+  overflow: hidden;
+}
+
+.charge-fill {
+  position: absolute;
+  inset: 0;
+  background-color: var(--ink);
+  transform-origin: bottom center;
+  transform: scaleY(0);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.eval-btn .btn-text {
+  position: relative;
+  z-index: 2;
+}
+
+.eval-btn.is-charging .btn-text {
+  color: var(--canvas);
+}
+
+.eval-btn:hover:not(.is-charging):not(.is-active) {
+  box-shadow: 7px 7px 0 var(--ink);
+  transform: translate(-2px, -2px);
+}
+
+.eval-btn.is-active {
+  transform: translate(4px, 4px) !important;
+  box-shadow: 0 0 0 var(--ink) !important;
+  transition: transform calc(var(--f) * 3) var(--snap-in), box-shadow calc(var(--f) * 3) var(--snap-in) !important;
+}
+
+.btn-focus-ring {
+  position: absolute;
+  inset: -7px;
+  border: 3px solid var(--ink);
+  pointer-events: none;
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path calc(var(--f) * 5) var(--snap-out), opacity 0ms calc(var(--f) * 5);
+}
+
+.eval-btn:focus-visible .btn-focus-ring {
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  transition: clip-path calc(var(--f) * 5) var(--snap-out), opacity 0ms;
+}
+
+/* Score Readout Card */
+.readout-card {
+  flex: 1;
+  padding: 1.5rem;
+  background-color: var(--canvas);
+  border: 3px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.readout-label {
+  font-size: 0.9rem;
+  font-variation-settings: 'wght' 700, 'wdth' 85;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.score-readout {
+  display: flex;
+  align-items: center;
+  font-size: clamp(4.5rem, 8vw, 6.5rem);
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wght' 800, 'wdth' 120;
+  color: var(--ink);
+  margin-top: 0;
+  height: 1em;
+  overflow: hidden;
+}
+
+.odometer-container {
+  display: flex;
+  align-items: center;
+  height: 1em;
+  overflow: hidden;
+}
+
+.odometer-digit-col {
+  position: relative;
+  display: inline-block;
+  height: 1em;
+  width: 1ch;
+  overflow: hidden;
+  vertical-align: top;
+  will-change: transform, width, opacity;
+  transition: width calc(var(--f) * 8) var(--snap-out), opacity calc(var(--f) * 8) var(--snap-out);
+}
+
+/* Odometer: 8 frames, --snap-out */
+.odometer-digit-strip {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  transition: transform calc(var(--f) * 8) var(--snap-out);
+  will-change: transform;
+}
+
+.odometer-digit-item,
+.odometer-static {
+  display: block;
+  height: 1em;
+  line-height: 1em;
+  text-align: center;
+}
+
+.odometer-digit-item.is-blank {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* ==========================================================================
+   Right Panel — Screen & Shutter Mechanism (Rule 3: Hide the Cut)
+   ========================================================================== */
+
+.right-rail,
+.result-panel {
+  position: relative;
+  border: 3px solid #000000;
+  background-color: var(--grade-color, #FFFFFF);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: clamp(1rem, 1.8vh, 1.5rem) clamp(1.25rem, 1.8vw, 1.75rem);
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  cursor: default;
+}
+
+/* Shutter Bars (F00–F04 sweep in, F04–F07 hold on black, F07–F12 retract) */
+.shutter-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: #000000;
+  z-index: 25;
+  pointer-events: none;
+  transform: scaleY(0);
+  will-change: transform;
+}
+
+.shutter-top {
+  top: 0;
+  transform-origin: top center;
+}
+
+.shutter-bottom {
+  bottom: 0;
+  transform-origin: bottom center;
+}
+
+.shutter-bar.closing {
+  transform: scaleY(1);
+  transition: transform calc(var(--f) * 4) var(--snap-in);
+}
+
+.shutter-bar.holding {
+  transform: scaleY(1);
+  transition: none;
+}
+
+.shutter-bar.opening {
+  transform: scaleY(0);
+  transition: transform calc(var(--f) * 5) var(--snap-out);
+}
+
+/* Ambient 1: 8s Diagonal Shine Pass (9 frames across, mix-blend-mode: difference) */
+.shine-bar {
+  position: absolute;
+  top: -60%;
+  left: -60%;
+  width: 40px;
+  height: 240%;
+  background: #000000;
+  mix-blend-mode: difference;
+  transform: rotate(25deg);
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+}
+
+.shine-bar.shining {
+  opacity: 1;
+  left: 150%;
+  transition: left calc(var(--f) * 9) var(--snap-out), opacity calc(var(--f) * 2) var(--snap-out);
+}
+
+/* Border Crawl (Single allowed linear loop) */
+.border-crawl-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.border-crawl-svg rect {
+  animation: crawlDash 40s linear infinite;
+}
+
+@keyframes crawlDash {
+  0%   { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -48; }
+}
+
+/* ==========================================================================
+   Hero Grade Letter & Echo Trails (Oversized & Cut Off Top/Right)
+   ========================================================================== */
+
+.grade-letter-mask {
+  position: absolute;
+  top: clamp(0.75rem, 1.5vh, 1.5rem);
+  right: clamp(1.25rem, 2vw, 2.25rem);
+  font-size: clamp(12rem, min(28vw, 44vh), 22rem);
+  line-height: 0.95;
+  font-variation-settings: 'wght' 800, 'wdth' 130;
+  height: 1em;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 3;
+  color: var(--ink);
+  user-select: none;
+  transform-origin: center center;
+  transform: scale(1.0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  backface-visibility: hidden;
+}
+
+.grade-letter-mask.holding-scale {
+  transform: scale(1.06);
+  transition: none;
+  will-change: transform;
+}
+
+/* F12–F16: Settle from scale(1.06) to scale(1.0) over 4 frames on --snap-out */
+.grade-letter-mask.settling {
+  transform: scale(1.0);
+  transition: transform calc(var(--f) * 4) var(--snap-out);
+  will-change: transform;
+}
+
+/* Echo Trails: Disabled to prevent ghost blur artifacts */
+.letter-echo {
+  display: none !important;
+}
+
+/* Staged Scene: pins elements to initial values during hold & reveal */
+.result-panel.staged .word-inner {
+  transform: translateY(105%) !important;
+  transition: none !important;
+}
+
+.result-panel.staged .word-mask {
+  animation: none !important;
+  transform: none !important;
+}
+
+.result-panel.staged .star-slot {
+  transform: scale(0) !important;
+  opacity: 0 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Grade Strip */
+.grade-roll-strip {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  position: relative;
+  z-index: 2;
+}
+
+.roll-letter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 1em;
+  line-height: 1;
+  text-align: right;
+  font-variation-settings: 'wght' 800, 'wdth' 130;
+  color: var(--ink);
+}
+
+/* ==========================================================================
+   Technique: Kinetic Typography with Contra-Motion on Verdict
+   ========================================================================== */
+
+.verdict-section {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 70%;
+}
+
+.verdict-line {
+  font-size: clamp(1.25rem, 1.8vw, 1.75rem);
+  font-variation-settings: 'wght' 600, 'wdth' 90;
+  color: var(--ink);
+  line-height: 1.15;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* Word Mask & Contra-Motion (Inner rises 105%, outer drops 20% and returns) */
+.word-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  margin-right: 0.3em;
+  transform: translateY(0);
+}
+
+.word-inner {
+  display: inline-block;
+  transform: translateY(105%);
+}
+
+.word-mask.typesetting {
+  animation: wordContra calc(var(--f) * 5) var(--snap-out) forwards;
+}
+
+.word-inner.revealing {
+  transform: translateY(0);
+  transition: transform calc(var(--f) * 5) var(--snap-out);
+}
+
+@keyframes wordContra {
+  0%   { transform: translateY(20%); }
+  100% { transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Stars (F16–F26: 2 frames apart, 6 frames each, --snap-out)
+   ========================================================================== */
+
+.star-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.star-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.75rem, 2vw, 2.25rem);
+  height: clamp(1.75rem, 2vw, 2.25rem);
+  transform-origin: center center;
+  cursor: pointer;
+  transform: scale(0);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.star-slot.stagger-in {
+  animation: starEntrance calc(var(--f) * 6) var(--snap-out) forwards;
+  animation-delay: calc(var(--i, 0) * var(--f) * 2);
+}
+
+@keyframes starEntrance {
+  0% {
+    transform: scale(0) rotate(-12deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.star-slot.star-hover-lift {
+  transform: translateY(-6px) rotate(-6deg) scale(1) !important;
+  transition: transform calc(var(--f) * 4) var(--snap-out);
+}
+
+.star-impact-ring {
+  position: absolute;
+  inset: -2px;
+  border: 3px solid #000000;
+  border-radius: 50% !important;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0);
+}
+
+.star-impact-ring.impact {
+  animation: starRing calc(var(--f) * 9) var(--snap-out) forwards;
+}
+
+@keyframes starRing {
+  0%   { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.star-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ==========================================================================
+   Full-Width Proportional Band Strip Section (Proportional & Contained)
+   ========================================================================== */
+
+.band-strip-section {
+  width: 100%;
+  position: relative;
+  flex-shrink: 0;
+  padding-top: 1.75rem;
+  margin-top: 0.5rem;
+}
+
+.band-strip {
+  display: grid;
+  grid-template-columns: 60fr 10fr 10fr 10fr 11fr;
+  width: 100%;
+  height: 4.5rem;
+  border: 3px solid #000000;
+  background: #FFFFFF;
+  position: relative;
+  cursor: pointer;
+}
+
+.band-segment {
+  position: relative;
+  border-right: 3px solid #000000;
+  background: #FFFFFF;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  transition: background-color calc(var(--f) * 3) var(--snap-out);
+}
+
+.band-segment:last-child {
+  border-right: none;
+}
+
+.band-segment.is-active {
+  background-color: var(--grade-color, #FFFFFF);
+}
+
+.band-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0 0.85rem;
+  height: 100%;
+  position: relative;
+  z-index: 2;
+  user-select: none;
+}
+
+.band-grade {
+  font-size: 1.65rem;
+  font-variation-settings: 'wght' 800, 'wdth' 120;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+  color: #000000;
+}
+
+.band-range {
+  font-size: 0.75rem;
+  font-variation-settings: 'wght' 600, 'wdth' 85;
+  letter-spacing: 0.04em;
+  color: #000000;
+  white-space: nowrap;
+}
+
+/* Band segment wipe disabled (no blinking on arrival) */
+.band-wipe {
+  display: none !important;
+}
+
+/* 6px Black Vertical Marker Assembly */
+.band-marker-assembly {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  left: 0;
+  transform: translate3d(-50%, 0, 0);
+  will-change: left, transform;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.band-marker-line {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: 0;
+  width: 6px;
+  background: #000000;
+}
+
+.marker-score-label {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-anybody);
+  font-size: 0.85rem;
+  font-variation-settings: 'wght' 800, 'wdth' 115;
+  color: #000000;
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 1px 5px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 2px 2px 0 #000000;
+}
+
+/* ==========================================================================
+   Responsive & Reduced Motion
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  html, body {
+    height: auto;
+    min-height: 100%;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .viewport-wrapper {
+    height: auto;
+    min-height: 100vh;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: visible;
+    touch-action: pan-y;
+    padding: clamp(0.5rem, 1.5vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem) clamp(0.75rem, 2vh, 1.25rem);
+    gap: clamp(0.5rem, 1.2vh, 0.75rem);
+    justify-content: flex-start;
+  }
+
+  .app-header {
+    margin-bottom: 0.2rem;
+  }
+
+  .page-title {
+    font-size: 1.35rem;
+  }
+
+  .evaluator-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    flex: 1 0 auto;
+  }
+
+  /* Side-by-side cards on mobile for maximum vertical compactness */
+  .left-rail {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 0.5rem;
+  }
+
+  .input-card {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .score-input {
+    padding: 0.45rem 0.6rem;
+    font-size: 1.15rem;
+  }
+
+  .eval-btn {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.95rem;
+  }
+
+  .readout-card {
+    padding: 0.75rem 0.85rem;
+    justify-content: center;
+  }
+
+  .readout-label {
+    font-size: 0.75rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .score-readout {
+    font-size: clamp(2.6rem, 8vw, 3.5rem);
+  }
+
+  .right-rail,
+  .result-panel {
+    min-height: 220px;
+    height: auto;
+    flex: 1 0 auto;
+    padding: 1.25rem 1rem;
+    position: relative;
+  }
+
+  /* Grade letter prominently hero-sized and inset from borders */
+  .grade-letter-mask {
+    top: clamp(0.5rem, 1.5vh, 1rem);
+    right: clamp(0.75rem, 2.5vw, 1.25rem);
+    font-size: clamp(9.5rem, min(34vw, 28vh), 14rem);
+    line-height: 0.9;
+    transform-origin: center center;
+  }
+
+  .verdict-section {
+    max-width: 80%;
+    gap: 0.35rem;
+  }
+
+  .verdict-line {
+    font-size: clamp(1.15rem, 4vw, 1.45rem);
+  }
+
+  .star-row {
+    gap: 0.35rem;
+  }
+
+  .star-svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Full-width band strip prominently visible at bottom */
+  .band-strip-section {
+    width: 100%;
+    flex-shrink: 0;
+    margin-top: 0.5rem;
+    padding-top: 1.5rem;
+  }
+
+  .band-strip {
+    height: 3.25rem;
+    touch-action: none;
+  }
+
+  .band-grade {
+    font-size: 1.15rem;
+    margin-bottom: 0.1rem;
+  }
+
+  .band-range {
+    font-size: 0.6rem;
+  }
+
+  .band-content {
+    padding: 0 0.35rem;
+  }
+
+  .marker-score-label {
+    font-size: 0.75rem;
+    padding: 1px 4px;
+    bottom: calc(100% + 3px);
+  }
+}
+
+@media (max-width: 360px) {
+  .left-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .grade-letter-mask {
+    font-size: clamp(8rem, 30vw, 10.5rem);
+    top: 0.5rem;
+    right: 0.75rem;
+  }
+}
+
+/* Reduced Motion Floor: shutter fires in 1 frame each way, no hold, no ambient */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .border-crawl-svg rect,
+  .bottom-rule.pulse-invitation,
+  .star-impact-ring.impact,
+  .shine-bar {
+    animation: none !important;
+    display: none !important;
+  }
+
+  .letter-echo {
+    display: none !important;
+  }
+
+  .shutter-bar.closing,
+  .shutter-bar.opening {
+    transition-duration: calc(var(--f) * 1) !important;
+  }
+
+  .word-inner,
+  .word-mask {
+    transform: none !important;
+  }
+}

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Score and grade</title>
+  <!-- Single external resource: Google Fonts Anybody variable font -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,100..900&display=swap">
+  <link rel="stylesheet" href="style.css?v=pass15">
+</head>
+<body>
+  <div class="viewport-wrapper" id="viewportWrapper">
+    <header class="app-header">
+      <h1 class="page-title">Score and grade</h1>
+    </header>
+
+    <main class="evaluator-grid">
+      <!-- Left Rail (~34%) -->
+      <section class="left-rail" aria-label="Score entry and numerical readout">
+        <!-- Input Card -->
+        <div class="neo-card input-card">
+          <form id="evalForm" novalidate>
+            <label for="scoreInput" class="field-label">Score 0&ndash;100</label>
+            <div class="input-wrapper" id="inputWrapper">
+              <input 
+                type="text" 
+                id="scoreInput" 
+                name="score" 
+                class="score-input" 
+                inputmode="numeric" 
+                autocomplete="off" 
+                placeholder="" 
+                aria-describedby="errorMsg"
+              >
+              <div class="bottom-rule" id="bottomRule" aria-hidden="true"></div>
+              <span class="focus-ring" aria-hidden="true"></span>
+            </div>
+            <div id="errorMsg" class="error-msg" role="alert" aria-live="assertive"></div>
+            
+            <button type="submit" id="evalBtn" class="eval-btn">
+              <span class="charge-fill" id="chargeFill" aria-hidden="true"></span>
+              <span class="btn-text">Evaluate</span>
+              <span class="btn-focus-ring" aria-hidden="true"></span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Score Readout Card -->
+        <div class="neo-card readout-card" id="readoutCard">
+          <span class="readout-label">Score</span>
+          <div id="scoreReadout" class="score-readout" aria-label="Score value">
+            <div class="odometer-container" id="odometerContainer">
+              <span class="odometer-static">0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Motion Graphics Screen -->
+      <section class="right-rail result-panel" id="rightPanel" aria-label="Evaluator outcome">
+        <!-- Shutter Mechanism (Hide the Cut) -->
+        <div class="shutter-bar shutter-top" id="shutterTop" aria-hidden="true"></div>
+        <div class="shutter-bar shutter-bottom" id="shutterBottom" aria-hidden="true"></div>
+
+        <!-- 8s Diagonal Shine Pass -->
+        <div class="shine-bar" id="shineBar" aria-hidden="true"></div>
+
+        <!-- 40s Border Crawl -->
+        <svg class="border-crawl-svg" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <rect x="0" y="0" width="100" height="100" fill="none" stroke="#000000" stroke-width="3" stroke-dasharray="14 10" vector-effect="non-scaling-stroke" />
+        </svg>
+
+        <!-- Hero Grade Letter -->
+        <div class="grade-letter-mask" id="gradeLetterMask">
+          <div class="grade-roll-strip" id="gradeStrip">
+            <span class="roll-letter">F</span>
+          </div>
+        </div>
+
+        <!-- Bottom Outcome: Kinetic Verdict, Stars & Band Strip -->
+        <div class="verdict-section" id="verdictSection">
+          <div id="verdictLine" class="verdict-line">
+            <!-- Word spans injected dynamically at runtime -->
+            <span class="word-mask"><span class="word-inner">Awaiting</span></span>
+            <span class="word-mask"><span class="word-inner">evaluation</span></span>
+          </div>
+
+          <div id="starRow" class="star-row" role="img" aria-label="0 out of 5 stars">
+            <!-- Inline SVG star paths with --i -->
+            <span class="star-slot" style="--i: 0"><svg viewBox="0 0 24 24" class="star-svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="#000000" stroke-width="3" stroke-linejoin="miter" fill="none" /></svg></span>
+            <span class="star-slot" style="--i: 1"><svg viewBox="0 0 24 24" class="star-svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="#000000" stroke-width="3" stroke-linejoin="miter" fill="none" /></svg></span>
+            <span class="star-slot" style="--i: 2"><svg viewBox="0 0 24 24" class="star-svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="#000000" stroke-width="3" stroke-linejoin="miter" fill="none" /></svg></span>
+            <span class="star-slot" style="--i: 3"><svg viewBox="0 0 24 24" class="star-svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="#000000" stroke-width="3" stroke-linejoin="miter" fill="none" /></svg></span>
+            <span class="star-slot" style="--i: 4"><svg viewBox="0 0 24 24" class="star-svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="#000000" stroke-width="3" stroke-linejoin="miter" fill="none" /></svg></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Full-Width Proportional Band Strip (Outside Result Panel, 7rem tall, 3px solid ink) -->
+    <section class="band-strip-section" aria-label="Grade distribution band strip">
+      <div class="band-strip" id="bandStrip" role="region" aria-label="Score band distribution 0 to 100">
+        <!-- Segment F: 60% width (0-59) -->
+        <div class="band-segment segment-f" data-grade="F">
+          <div class="band-wipe" aria-hidden="true"></div>
+          <div class="band-content">
+            <span class="band-grade">F</span>
+            <span class="band-range">0&ndash;59</span>
+          </div>
+        </div>
+
+        <!-- Segment D: 10% width (60-69) -->
+        <div class="band-segment segment-d" data-grade="D">
+          <div class="band-wipe" aria-hidden="true"></div>
+          <div class="band-content">
+            <span class="band-grade">D</span>
+            <span class="band-range">60&ndash;69</span>
+          </div>
+        </div>
+
+        <!-- Segment C: 10% width (70-79) -->
+        <div class="band-segment segment-c" data-grade="C">
+          <div class="band-wipe" aria-hidden="true"></div>
+          <div class="band-content">
+            <span class="band-grade">C</span>
+            <span class="band-range">70&ndash;79</span>
+          </div>
+        </div>
+
+        <!-- Segment B: 10% width (80-89) -->
+        <div class="band-segment segment-b" data-grade="B">
+          <div class="band-wipe" aria-hidden="true"></div>
+          <div class="band-content">
+            <span class="band-grade">B</span>
+            <span class="band-range">80&ndash;89</span>
+          </div>
+        </div>
+
+        <!-- Segment A: 11% width (90-100) -->
+        <div class="band-segment segment-a" data-grade="A">
+          <div class="band-wipe" aria-hidden="true"></div>
+          <div class="band-content">
+            <span class="band-grade">A</span>
+            <span class="band-range">90&ndash;100</span>
+          </div>
+        </div>
+
+        <!-- 6px Black Vertical Marker extending above and below strip with score number badge -->
+        <div class="band-marker-assembly" id="bandMarkerAssembly" aria-hidden="true">
+          <span class="marker-score-label" id="markerScoreLabel">0</span>
+          <div class="band-marker-line"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Polite ARIA Live Region for Screen Readers -->
+    <div id="ariaLive" class="sr-only" aria-live="polite"></div>
+  </div>
+
+  <script src="script.js?v=pass15"></script>
+</body>
+</html>
